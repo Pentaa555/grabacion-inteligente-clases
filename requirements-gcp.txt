@@ -1,0 +1,2 @@
+# Motor GCP (Google Cloud Speech-to-Text con diarización)
+google-cloud-speech==2.27.0

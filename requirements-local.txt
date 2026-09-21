@@ -1,0 +1,6 @@
+# Motor local / offline (stack del anteproyecto)
+# Requiere GPU NVIDIA para rendimiento razonable. En CPU funciona pero es lento.
+whisperx>=3.1.1
+# whisperx arrastra: torch, faster-whisper, pyannote.audio, transformers.
+# pyannote requiere aceptar los términos del modelo en Hugging Face y un token:
+#   export HUGGINGFACE_TOKEN=hf_xxx

@@ -1,0 +1,32 @@
+# Entornos virtuales de Python
+.venv/
+venv/
+env/
+
+# Cache de Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Credenciales / secretos
+*.json.key
+credentials.json
+*-credentials.json
+.env
+
+# Archivos multimedia de prueba (no versionar)
+*.mkv
+*.wav
+*.flac
+*.mp4
+*.mp3
+
+# Datos generados por el pipeline / webapp
+salida/
+salida_local/
+salida_local_sync/
+webdata/
+
+# Sistema
+.DS_Store
