@@ -28,19 +28,28 @@ class MockEngine(TranscriptionEngine):
     def is_available(self) -> tuple[bool, str]:
         return True, "Motor mock siempre disponible."
 
-    def transcribe(self, audio_path: str | Path) -> TranscriptionResult:
+    def transcribe(self, audio_path, progress_cb=None) -> TranscriptionResult:
         # Duración real si es posible, si no un valor por defecto.
         from ..capture import probe_duration
+        import time
 
         total = probe_duration(audio_path) or 21.0
         n = len(_FRASES)
         step = total / n
+        # Si se pide simular carga (para ver la barra de progreso), reparte un
+        # retardo total entre los segmentos. Útil para demostrar el % sin GPU.
+        sim_seconds = float(self.options.get("simulate_seconds", 0) or 0)
+        per_seg_delay = (sim_seconds / n) if sim_seconds > 0 else 0.0
         segments = []
         for i, frase in enumerate(_FRASES):
             start = round(i * step, 2)
             end = round(min((i + 1) * step, total), 2)
             speaker = "Docente" if i % 2 == 0 else "Estudiante"
             segments.append(Segment(start=start, end=end, speaker=speaker, text=frase))
+            if per_seg_delay:
+                time.sleep(per_seg_delay)
+            if progress_cb is not None:
+                progress_cb(end)  # segundos "procesados" -> el front lo pasa a %
         return TranscriptionResult(
             engine=self.name, language=self.language, segments=segments
         )

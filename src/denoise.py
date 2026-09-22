@@ -32,8 +32,33 @@ def _require_ffmpeg() -> str:
     return ff
 
 
-# Cadena de filtros por defecto (banda de voz + denoise espectral + normalización).
+# Cadena de filtros por defecto (banda de voz + denoise espectral SUAVE + normalización).
+#
+# IMPORTANTE — por qué esta cadena es suave:
+#   La cadena original usaba `afftdn=nf=-25` + `loudnorm`. Sobre el audio de prueba
+#   (clase de 69 min) resultó DEMASIADO agresiva: borró la voz junto con el ruido
+#   (se midió mean_volume == max_volume == -21 dB, señal casi plana en el min 10),
+#   y Whisper alucinó "Gracias." cada 30 s sobre ese silencio.
+#
+# Ajustes:
+#   afftdn=nf=-20:nr=6  -> denoise espectral SUAVE. Dos parámetros:
+#       nf (noise floor): rango válido de FFmpeg es [-80, -20]; -20 es el extremo
+#           MÁS suave posible (antes -25, hacia el lado fuerte). Un nf muy negativo
+#           trata más señal como ruido y la borra.
+#       nr (noise reduction, dB): cuánto atenúa el ruido detectado; 6 dB es
+#           moderado (el defecto es 12), suficiente para limpiar sin matar la voz.
+#   loudnorm -> reemplazado por `dynaudnorm`, normalización más suave que no
+#               reprocesa toda la dinámica ni exagera el ruido de fondo.
 _FFMPEG_VOICE_CHAIN = (
+    "highpass=f=80,"
+    "lowpass=f=8000,"
+    "afftdn=nf=-20:nr=6,"
+    "dynaudnorm=f=200:g=5"
+)
+
+# Cadena original (AGRESIVA) — conservada para comparar en la tesis el efecto del
+# denoise fuerte. Selecciónala pasando filter_chain=_FFMPEG_VOICE_CHAIN_AGGRESSIVE.
+_FFMPEG_VOICE_CHAIN_AGGRESSIVE = (
     "highpass=f=80,"
     "lowpass=f=8000,"
     "afftdn=nf=-25,"

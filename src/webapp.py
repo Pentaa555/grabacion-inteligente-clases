@@ -42,7 +42,7 @@ def _set(job_id: str, **kw) -> None:
 
 def _run_job(job_id: str, media_path: Path, engine_name: str, lang: str,
              model: str, denoise: bool, min_speakers: int | None,
-             max_speakers: int | None) -> None:
+             max_speakers: int | None, simulate_seconds: float = 0.0) -> None:
     """Ejecuta el pipeline en un thread; actualiza JOBS[job_id]."""
     try:
         out_dir = OUTPUT_DIR / job_id
@@ -62,20 +62,42 @@ def _run_job(job_id: str, media_path: Path, engine_name: str, lang: str,
             _set(job_id, stage="reduciendo ruido")
             audio = denoise_mod.denoise(audio, out_dir / "audio_denoised.flac")
 
+        # Duración total del audio: base para el % de transcripción.
+        total_dur = capture.probe_duration(audio)
+        _set(job_id, duration=total_dur, progress=0.0)
+
         # 3. Motor.
         opts: dict = {"language": lang, "model": model}
         if min_speakers is not None:
             opts["min_speakers"] = min_speakers
         if max_speakers is not None:
             opts["max_speakers"] = max_speakers
+        if simulate_seconds:
+            opts["simulate_seconds"] = simulate_seconds
         engine = get_engine(engine_name, **opts)
         ok, reason = engine.is_available()
         if not ok:
             _set(job_id, status="error", error=f"Motor '{engine_name}' no disponible: {reason}")
             return
 
+        # Callback de progreso: el motor informa cuántos segundos de audio lleva
+        # procesados; lo convertimos a fracción [0..1] contra la duración total.
+        def _on_progress(processed_sec: float) -> None:
+            if total_dur > 0:
+                frac = max(0.0, min(1.0, processed_sec / total_dur))
+                _set(job_id, progress=round(frac, 4))
+
         _set(job_id, stage=f"transcribiendo ({engine_name})")
-        result = engine.transcribe(audio)
+        import time
+        _t0 = time.perf_counter()
+        result = engine.transcribe(audio, progress_cb=_on_progress)
+        elapsed = time.perf_counter() - _t0
+        _set(job_id, progress=1.0)
+
+        # Registrar el tiempo de proceso y si se aplicó denoise, para comparar
+        # modelos de forma reproducible (queda escrito en transcripcion.json).
+        result.processing_seconds = elapsed
+        result.denoise = bool(denoise)
 
         # 4. Subtítulos.
         paths = subtitles.write_all(result, out_dir)
@@ -88,8 +110,11 @@ def _run_job(job_id: str, media_path: Path, engine_name: str, lang: str,
             outputs={k: str(v) for k, v in paths.items()},
             video=str(video_for_player) if video_for_player else None,
             duration=capture.probe_duration(audio),
+            processing_seconds=round(elapsed, 2),
         )
     except Exception as e:  # noqa: BLE001 — reportamos cualquier fallo al front
+        import traceback
+        traceback.print_exc()  # traceback completo al uvicorn.err.log
         _set(job_id, status="error", error=f"{type(e).__name__}: {e}")
 
 
@@ -118,6 +143,7 @@ async def process(
     denoise: bool = Form(default=False),
     min_speakers: int | None = Form(default=None),
     max_speakers: int | None = Form(default=None),
+    simulate_seconds: float = Form(default=0.0),
 ) -> JSONResponse:
     job_id = uuid.uuid4().hex[:12]
 
@@ -138,7 +164,7 @@ async def process(
     t = threading.Thread(
         target=_run_job,
         args=(job_id, media_path, engine, lang, model, denoise,
-              min_speakers, max_speakers),
+              min_speakers, max_speakers, simulate_seconds),
         daemon=True,
     )
     t.start()
@@ -202,6 +228,12 @@ INDEX_HTML = """<!doctype html>
   th{color:var(--mut);font-weight:600} .sp{color:var(--gold);font-weight:600;white-space:nowrap}
   .dl a{color:var(--acc);margin-right:14px;text-decoration:none} .hidden{display:none}
   small.hint{color:var(--mut)}
+  .bar{height:14px;background:#0f1720;border:1px solid #2a3b4d;border-radius:8px;overflow:hidden;margin:6px 0}
+  .bar > i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--acc),var(--gold));transition:width .25s ease}
+  .barlabel{display:flex;justify-content:space-between;font-size:12px;color:var(--mut);margin-top:8px}
+  .barwrap{margin-top:12px}
+  .indet > i{width:35% !important;animation:slide 1.1s infinite ease-in-out}
+  @keyframes slide{0%{margin-left:-35%}100%{margin-left:100%}}
 </style></head>
 <body>
 <header><h1>🎓 Plataforma de testeo — Grabación inteligente de clases</h1>
@@ -239,7 +271,17 @@ INDEX_HTML = """<!doctype html>
     <div class="chk"><input type="checkbox" id="denoise"><label for="denoise" style="margin:0">Reducir ruido antes del ASR (P2)</label></div>
     <button id="go">Procesar</button>
     <p id="status"></p>
+
+    <div id="progwrap" class="barwrap hidden">
+      <div class="barlabel"><span>Subida del archivo</span><span id="uplbl">0%</span></div>
+      <div class="bar"><i id="upbar"></i></div>
+      <div class="barlabel"><span id="prstage">Procesando…</span><span id="prlbl"></span></div>
+      <div class="bar" id="prbarbox"><i id="prbar"></i></div>
+      <div class="barlabel"><span id="prtime">⏱ 0s</span><span id="prdur"></span></div>
+    </div>
+
     <small class="hint">El modelo local grande puede tardar y consumir RAM. En este equipo usa <b>base</b>/<b>small</b>.</small>
+    <div class="chk" style="margin-top:10px"><input type="checkbox" id="simchk"><label for="simchk" style="margin:0">Simular carga (motor mock) — para ver la barra sin GPU</label></div>
   </div>
 
   <div class="card hidden" id="results">
@@ -329,6 +371,8 @@ $("stop").onclick=()=>{
   $("rec").disabled=false;$("stop").disabled=true;
 };
 
+let jobStart=0, jobTimer=null;
+
 $("go").onclick=async()=>{
   const fd=new FormData();
   const f=$("file").files[0];
@@ -338,23 +382,75 @@ $("go").onclick=async()=>{
   fd.append("model",$("model").value);fd.append("denoise",$("denoise").checked);
   if($("minsp").value)fd.append("min_speakers",$("minsp").value);
   if($("maxsp").value)fd.append("max_speakers",$("maxsp").value);
+  if($("simchk").checked)fd.append("simulate_seconds","20");
   $("go").disabled=true;$("status").textContent="Enviando…";$("results").classList.add("hidden");
-  const res=await fetch("/api/process",{method:"POST",body:fd});
-  if(!res.ok){$("status").textContent="Error: "+(await res.text());$("go").disabled=false;return}
-  const {job_id}=await res.json();poll(job_id);
+
+  // Barras: mostrar y resetear.
+  $("progwrap").classList.remove("hidden");
+  setUp(0); setProc(null,"Subiendo…");
+  $("prtime").textContent="⏱ 0s"; $("prdur").textContent="";
+
+  // XHR para tener progreso REAL de subida (fetch no lo expone).
+  const xhr=new XMLHttpRequest();
+  xhr.open("POST","/api/process");
+  xhr.upload.onprogress=e=>{ if(e.lengthComputable) setUp(e.loaded/e.total); };
+  xhr.upload.onload=()=>{ setUp(1); setProc(null,"En cola…"); };
+  xhr.onload=()=>{
+    if(xhr.status<200||xhr.status>=300){
+      $("status").textContent="Error: "+xhr.responseText;$("go").disabled=false;return;
+    }
+    const {job_id}=JSON.parse(xhr.responseText);
+    jobStart=Date.now();
+    clearInterval(jobTimer);
+    jobTimer=setInterval(()=>{$("prtime").textContent="⏱ "+((Date.now()-jobStart)/1000|0)+"s"},500);
+    poll(job_id);
+  };
+  xhr.onerror=()=>{$("status").textContent="Error de red al subir.";$("go").disabled=false;};
+  xhr.send(fd);
 };
+
+function setUp(frac){ // barra de subida
+  const pct=Math.round((frac||0)*100);
+  $("upbar").style.width=pct+"%"; $("uplbl").textContent=pct+"%";
+}
+function setProc(frac,stage){ // barra de transcripción
+  if(stage!==undefined && stage!==null) $("prstage").textContent=stage;
+  const box=$("prbarbox");
+  if(frac===null||frac===undefined){ // sin % -> barra indeterminada animada
+    box.classList.add("indet"); $("prbar").style.width=""; $("prlbl").textContent="";
+  }else{
+    box.classList.remove("indet");
+    const pct=Math.round(frac*100);
+    $("prbar").style.width=pct+"%"; $("prlbl").textContent=pct+"%";
+  }
+}
 
 async function poll(id){
   const r=await fetch("/api/job/"+id);const j=await r.json();
   $("status").textContent="Estado: "+(j.stage||j.status);
-  if(j.status==="running"){setTimeout(()=>poll(id),1500);return}
+  // Barra de transcripción: si el motor reporta progress numérico, lo mostramos;
+  // si solo hay una etapa (extraer/denoise/gcp), barra indeterminada.
+  if(typeof j.progress==="number" && (j.stage||"").startsWith("transcribiendo")){
+    setProc(j.progress,"Transcribiendo");
+  }else{
+    setProc(null, j.stage||"Procesando…");
+  }
+  if(j.duration) $("prdur").textContent="audio: "+fmt(j.duration);
+  if(j.status==="running"){setTimeout(()=>poll(id),800);return}
+  clearInterval(jobTimer);
   $("go").disabled=false;
-  if(j.status==="error"){$("status").textContent="❌ "+j.error;return}
+  if(j.status==="error"){$("status").textContent="❌ "+j.error;setProc(0,"Error");return}
+  setProc(1,"Completado");
   render(id,j);
 }
 
 function render(id,j){
-  $("status").textContent="✅ "+(j.result.segments.length)+" segmentos · hablantes: "+j.result.speakers.join(", ");
+  let head="✅ "+(j.result.segments.length)+" segmentos · hablantes: "+j.result.speakers.join(", ");
+  const ps=j.result.processing_seconds;
+  if(ps){ head+=" · ⏱ proceso: "+fmt(ps); if(j.duration){ head+=" ("+(j.duration/ps).toFixed(1)+"× tiempo real)"; } }
+  if(j.result.model){ head+=" · modelo: "+j.result.model; }
+  head+=" · denoise: "+(j.result.denoise?"sí":"no");
+  $("status").textContent=head;
   $("results").classList.remove("hidden");
   const p=$("player");p.innerHTML="";
   if(j.video){

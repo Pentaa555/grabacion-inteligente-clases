@@ -28,5 +28,10 @@ salida_local/
 salida_local_sync/
 webdata/
 
+# Logs del servidor
+uvicorn.out.log
+uvicorn.err.log
+*.log
+
 # Sistema
 .DS_Store

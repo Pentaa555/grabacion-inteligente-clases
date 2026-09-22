@@ -26,6 +26,9 @@ class TranscriptionResult:
     engine: str
     language: str
     segments: List[Segment] = field(default_factory=list)
+    model: str = ""       # p. ej. "medium" / "large-v3" (vacío si no aplica)
+    processing_seconds: float = 0.0   # tiempo real que tardó el pipeline (s)
+    denoise: bool = False             # si se aplicó reducción de ruido
 
     @property
     def speakers(self) -> List[str]:
@@ -38,7 +41,10 @@ class TranscriptionResult:
     def to_dict(self) -> dict:
         return {
             "engine": self.engine,
+            "model": self.model,
             "language": self.language,
+            "processing_seconds": round(self.processing_seconds, 2),
+            "denoise": self.denoise,
             "speakers": self.speakers,
             "segments": [asdict(s) for s in self.segments],
         }

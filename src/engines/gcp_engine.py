@@ -42,7 +42,7 @@ class GCPEngine(TranscriptionEngine):
         return True, ("GCP disponible (clave JSON)." if has_key
                       else "GCP disponible (ADC).")
 
-    def transcribe(self, audio_path: str | Path) -> TranscriptionResult:
+    def transcribe(self, audio_path, progress_cb=None) -> TranscriptionResult:
         ok, reason = self.is_available()
         if not ok:
             raise RuntimeError(f"Motor gcp no disponible: {reason}")
