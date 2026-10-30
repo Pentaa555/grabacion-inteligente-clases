@@ -138,8 +138,65 @@ class LocalEngine(TranscriptionEngine):
         # Si no hubo diarización, todos quedan como SPEAKER_00.
         final_segments = self._assign_speakers(transcript_segments, diar_segments)
 
+        # Identificar al docente (P4). Por defecto, heurística de clase magistral:
+        # el hablante con MÁS tiempo de habla acumulado es el docente. Se puede
+        # desactivar con options["identify_teacher"]=False.
+        teacher_label, teacher_method = "", ""
+        if self.options.get("identify_teacher", True):
+            teacher_label, teacher_method = self._identify_teacher(final_segments)
+
         return TranscriptionResult(self.name, self.language, final_segments,
-                                   model=model_size)
+                                   model=model_size,
+                                   teacher=teacher_label,
+                                   teacher_method=teacher_method)
+
+    def _identify_teacher(self, segments: list) -> tuple[str, str]:
+        """Marca al docente y re-etiqueta los hablantes con nombres legibles.
+
+        Heurística (clase magistral): el docente es el hablante que acumula más
+        tiempo de habla. Es el supuesto estándar y defendible para una clase
+        expositiva; una versión futura puede confirmarlo con una muestra de voz
+        (embeddings) de clases pasadas.
+
+        Efecto:
+          - El SPEAKER_xx con más segundos totales -> "Docente" (is_teacher=True).
+          - Los demás -> "Hablante 1", "Hablante 2", ... por tiempo descendente.
+        Si no hubo diarización real (un solo hablante), no fuerza la etiqueta
+        "Docente": deja "Hablante 1", porque no se puede distinguir a nadie.
+        """
+        if not segments:
+            return "", ""
+
+        # Tiempo total de habla por etiqueta original de diarización.
+        totals: dict[str, float] = {}
+        for s in segments:
+            totals[s.speaker] = totals.get(s.speaker, 0.0) + max(0.0, s.end - s.start)
+
+        # Sin diarización útil (un único hablante) no se identifica docente.
+        if len(totals) < 2:
+            only = next(iter(totals))
+            for s in segments:
+                if s.speaker == only:
+                    s.speaker = "Hablante 1"
+            return "", ""
+
+        # Ordenar hablantes por tiempo de habla descendente.
+        ordered = sorted(totals, key=lambda k: -totals[k])
+        teacher_src = ordered[0]
+
+        # Construir el mapa de re-etiquetado legible.
+        relabel: dict[str, str] = {teacher_src: "Docente"}
+        n = 1
+        for spk in ordered[1:]:
+            relabel[spk] = f"Hablante {n}"
+            n += 1
+
+        for s in segments:
+            new = relabel.get(s.speaker, s.speaker)
+            s.is_teacher = (new == "Docente")
+            s.speaker = new
+
+        return "Docente", "mayor_tiempo_de_habla"
 
     def _diarize_chunked(self, pipeline, audio_path, min_speakers, max_speakers,
                          chunk_sec=600.0, overlap_sec=30.0) -> list:

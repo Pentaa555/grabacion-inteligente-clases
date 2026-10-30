@@ -19,6 +19,7 @@ El pipeline está desacoplado del motor de ASR/diarización mediante una interfa
 |------------|----------------|------------|
 | `gcp`      | Google Cloud Speech-to-Text v2 (diarización nativa) | Pago por uso (tu petición) |
 | `local`   | WhisperX + pyannote.audio | Offline / gratuito (stack del PDF) |
+| `whistle` | Cactus Whistle + pyannote.audio | Offline / ligero; ASR en ventanas de 28 s |
 | `mock`    | Datos sintéticos, sin dependencias | Para probar el pipeline sin credenciales ni GPU |
 
 Así el prototipo cumple tu pedido (GCP) **y** conserva la ruta offline del anteproyecto.
@@ -97,3 +98,26 @@ Salidas en `./salida/<nombre>/`: `subtitulos.srt`, `subtitulos.vtt`, `transcripc
 Incluye: captura, extracción de audio, transcripción, diarización, subtítulos SRT/VTT/JSON.
 **No** incluye todavía (fases posteriores del PDF): reducción de ruido (DeepFilterNet),
 filtrado semántico (BETO), resumen automático, ni la plataforma web (FastAPI + React).
+
+## Extracción del tablero (cuaderno digital)
+
+La ruta `board` procesa el video y genera páginas visuales del tablero en
+`salida/<video>_tablero/`: reconstrucción limpia, máscara binaria, máscaras de
+persona y `cuaderno.json`.
+
+Para una grabación donde la pizarra ocupa solo parte del encuadre:
+
+```bash
+pip install -r requirements-board.txt
+python -m src.cli board "clase.mp4" \\
+  --roi "0.52,0.33,0.88,0.80" \\
+  --person-segmentation \\
+  --stabilize \\
+  --person-model "yolo11n-seg.pt" \\
+  --debug
+```
+
+`--roi` usa fracciones `x0,y0,x1,y1` del frame. `--person-segmentation`
+activa YOLO-seg en GPU y excluye al profesor durante la reconstrucción temporal.
+La escritura que estuvo siempre cubierta no puede recuperarse sin información
+visible en otro frame.

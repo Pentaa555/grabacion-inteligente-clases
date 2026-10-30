@@ -28,6 +28,9 @@ salida_local/
 salida_local_sync/
 webdata/
 
+# Pesos de modelos descargados localmente
+*.pt
+
 # Logs del servidor
 uvicorn.out.log
 uvicorn.err.log

@@ -1,0 +1,215 @@
+<!doctype html><html lang='es'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>Documento de Entrega</title><style>
+:root{--acc:#2b6a72;--gold:#c8701f;--txt:#1c2733;--mut:#5b6b78;--line:#d9e0e6;--bg:#fff}
+*{box-sizing:border-box}
+body{font:15px/1.65 -apple-system,Segoe UI,Roboto,sans-serif;color:var(--txt);
+  max-width:820px;margin:0 auto;padding:48px 40px;background:var(--bg)}
+h1{font-size:26px;border-bottom:3px solid var(--acc);padding-bottom:10px;margin-top:0}
+h2{font-size:20px;color:var(--acc);margin-top:34px;border-bottom:1px solid var(--line);padding-bottom:5px}
+h3{font-size:16px;color:var(--txt);margin-top:24px}
+p{margin:10px 0}
+table{border-collapse:collapse;width:100%;margin:14px 0;font-size:14px}
+th,td{border:1px solid var(--line);padding:8px 11px;text-align:left}
+th{background:#eef3f5;color:var(--txt);font-weight:600}
+td:last-child,th:last-child{text-align:right}
+td:first-child,th:first-child{text-align:left}
+blockquote{border-left:4px solid var(--gold);background:#fbf5ee;margin:14px 0;
+  padding:10px 16px;color:#5a4632;border-radius:0 6px 6px 0}
+blockquote p{margin:4px 0}
+code{background:#eef3f5;padding:2px 6px;border-radius:4px;font-size:13px;
+  font-family:Consolas,Menlo,monospace}
+ul{margin:10px 0;padding-left:26px}
+li{margin:5px 0}
+hr{border:0;border-top:1px solid var(--line);margin:26px 0}
+strong{color:var(--txt)}
+em{color:var(--mut)}
+@media print{body{padding:0}h2{page-break-after:avoid}table,blockquote{page-break-inside:avoid}}
+</style></head><body><h1>Grabación Inteligente de Clases — Documento de Entrega de Resultados</h1>
+<p><strong>Proyecto:</strong> Sistema de grabación, transcripción, diarización y filtrado semántico de clases presenciales</p>
+<p><strong>Fecha de entrega:</strong> 23 de septiembre de 2026</p>
+<p><strong>Estado:</strong> Prototipo funcional con métricas validadas</p>
+<hr>
+<h2>1. Resumen ejecutivo</h2>
+<p>Se construyó un prototipo funcional que **graba una clase, extrae y limpia el audio,</p>
+<p>lo transcribe automáticamente y separa las voces de los distintos hablantes**,</p>
+<p>entregando subtítulos y una transcripción estructurada. El sistema fue validado</p>
+<p>sobre <strong>grabaciones reales de aula</strong> (clases de Física Electromagnética de 1 a 2</p>
+<p>horas) y alcanza las metas de precisión definidas en el anteproyecto.</p>
+<p><strong>Resultado principal:</strong> la transcripción automática logra un <strong>WER de 12,68 %</strong>,</p>
+<p>holgadamente por debajo de la meta de la tesis (<strong>WER &lt; 20 %</strong>), medido contra una</p>
+<p>transcripción de referencia hecha manualmente.</p>
+<hr>
+<h2>2. Métricas alcanzadas</h2>
+<h3>2.1 Precisión de transcripción (WER)</h3>
+<p>Se midió el <em>Word Error Rate</em> comparando la salida automática del sistema contra</p>
+<p>una transcripción de referencia (<em>ground truth</em>) elaborada <strong>manualmente</strong> sobre</p>
+<p>un fragmento representativo de 5 minutos de clase (explicación de la Ley de Coulomb).</p>
+<table>
+<thead><tr><th>Métrica</th><th>Valor</th></tr></thead><tbody>
+<tr><td>Palabras en la referencia manual</td><td>473</td></tr>
+<tr><td>Palabras acertadas</td><td>427</td></tr>
+<tr><td>Sustituciones</td><td>35</td></tr>
+<tr><td>Eliminaciones</td><td>11</td></tr>
+<tr><td>Inserciones</td><td>14</td></tr>
+<tr><td><strong>WER = (S+D+I)/N</strong></td><td><strong>12,68 %</strong></td></tr>
+<tr><td>Precisión de palabra</td><td>90,27 %</td></tr>
+</tbody></table>
+<blockquote><p><strong>Meta del anteproyecto:</strong> WER &lt; 20 % → <strong>✅ CUMPLE (con holgura)</strong></p></blockquote>
+<p><strong>Metodología:</strong> el cálculo usa distancia de edición a nivel de palabra (algoritmo</p>
+<p>de Levenshtein), la métrica estándar en la literatura de reconocimiento de voz. Antes</p>
+<p>de comparar, ambos textos se normalizan (minúsculas, sin tildes, sin puntuación —</p>
+<p>conservando el punto decimal de las cifras — y unificando números escritos con cifras,</p>
+<p>p. ej. &quot;nueve&quot; ↔ &quot;9&quot;) para no penalizar diferencias de formato que no son errores de</p>
+<p>reconocimiento. El procedimiento es reproducible mediante el script <code>src/wer.py</code>.</p>
+<p><strong>Naturaleza de los errores:</strong> los 35 errores restantes son errores reales de</p>
+<p>reconocimiento, no de formato: confusiones léxicas (<code>indica</code> → <code>toxica</code>,</p>
+<p><code>medida</code> → <code>limita</code>), notación técnica (<code>Q1</code> ↔ <code>Q2</code>) y diferencias menores de forma</p>
+<p>(<code>dirigido</code> ↔ <code>dirigida</code>). <strong>No se detectaron alucinaciones</strong> (texto inventado sobre</p>
+<p>silencio).</p>
+<h3>2.2 Comparación de modelos de transcripción (medium vs large-v3)</h3>
+<p>Se comparó el modelo <code>medium</code> frente a <code>large-v3</code> sobre el <strong>mismo audio</strong> y bajo</p>
+<p><strong>idénticas condiciones</strong>, para justificar la elección del modelo de producción.</p>
+<table>
+<thead><tr><th>Métrica</th><th>medium</th><th>large-v3</th><th>Diferencia</th></tr></thead><tbody>
+<tr><td>Segmentos generados</td><td>793</td><td>1 287</td><td>+62 %</td></tr>
+<tr><td>Palabras transcritas</td><td>7 712</td><td>8 126</td><td>+5,4 %</td></tr>
+<tr><td>Caracteres transcritos</td><td>45 041</td><td>47 323</td><td>+5,1 %</td></tr>
+<tr><td>Duración media por segmento</td><td>4,29 s</td><td>2,69 s</td><td>−37 % (más fino)</td></tr>
+<tr><td>Alucinaciones</td><td>Ninguna</td><td>Ninguna</td><td>igual</td></tr>
+</tbody></table>
+<p><strong>Decisión:</strong> se adopta <strong><code>large-v3</code></strong> como modelo de producción por su mayor</p>
+<p>cobertura léxica, segmentación más fina (mejor para subtítulos y diarización) y</p>
+<p>viabilidad en el hardware disponible (GPU NVIDIA RTX 3070). <code>medium</code> queda como</p>
+<p>alternativa cuando se priorice la velocidad (~2× más rápido).</p>
+<p><em>(Informe detallado en <code>webdata/salida/informe_comparacion_medium_vs_large.md</code>.)</em></p>
+<h3>2.3 Diarización (separación de hablantes)</h3>
+<p>Sobre una clase real completa (<strong>1 h 47 min</strong>), el sistema separó correctamente</p>
+<p><strong>7 hablantes distintos</strong> (<code>SPEAKER_00</code> … <code>SPEAKER_06</code>) en 1 926 segmentos, en</p>
+<p><strong>17,7 minutos de proceso</strong> (≈ 6× tiempo real) con GPU.</p>
+<blockquote><p>Este módulo tenía un fallo crítico corregido en esta fase: previamente colapsaba</p></blockquote>
+<blockquote><p>todas las voces en un único hablante. La corrección (emparejamiento de hablantes</p></blockquote>
+<blockquote><p>solo entre ventanas consecutivas por solape temporal) resolvió el problema, que</p></blockquote>
+<blockquote><p>era de código y no del audio.</p></blockquote>
+<h3>2.4 Identificación del docente</h3>
+<p>Sobre la diarización, el sistema <strong>identifica automáticamente al docente</strong> y</p>
+<p>re-etiqueta los hablantes con nombres legibles: el hablante identificado pasa a</p>
+<p><strong>&quot;Docente&quot;</strong> y los demás a <strong>&quot;Hablante 1&quot;, &quot;Hablante 2&quot;, …</strong></p>
+<p><strong>Criterio:</strong> en una clase magistral el docente es, por definición, quien acumula</p>
+<p><strong>mayor tiempo de habla</strong>. El sistema suma el tiempo total de intervención de cada</p>
+<p>hablante detectado por la diarización y asigna la etiqueta &quot;Docente&quot; al de mayor</p>
+<p>tiempo. El resultado incluye un desglose cuantitativo (<code>speaker_stats</code>) con el</p>
+<p>tiempo de habla, el número de intervenciones y el porcentaje de cada hablante, que</p>
+<p>respalda la identificación de forma verificable.</p>
+<p>Ejemplo del desglose que produce el sistema:</p>
+<table>
+<thead><tr><th>Hablante</th><th>Tiempo de habla</th><th>Intervenciones</th><th>% del total</th></tr></thead><tbody>
+<tr><td><strong>Docente</strong> 🎓</td><td>(mayor)</td><td>…</td><td>~el mayor %</td></tr>
+<tr><td>Hablante 1</td><td>…</td><td>…</td><td>…</td></tr>
+<tr><td>Hablante 2</td><td>…</td><td>…</td><td>…</td></tr>
+</tbody></table>
+<blockquote><p><strong>Salvaguarda de honestidad:</strong> si la diarización detecta un solo hablante (no hay</p></blockquote>
+<blockquote><p>a quién distinguir), el sistema <strong>no</strong> fuerza la etiqueta &quot;Docente&quot;; deja</p></blockquote>
+<blockquote><p>&quot;Hablante 1&quot;. La identificación solo se afirma cuando hay más de una voz separada.</p></blockquote>
+<p><strong>Mejora futura (no requerida para esta entrega):</strong> confirmar la identidad del</p>
+<p>docente mediante una <strong>muestra de voz</strong> (huella por <em>embeddings</em>) tomada de clases</p>
+<p>pasadas, en lugar de la heurística de tiempo de habla. Esto permitiría identificar</p>
+<p>al profesor aunque no sea quien más habla en una sesión concreta.</p>
+<hr>
+<h3>2.5 Filtrado semántico de intervenciones (aporte de ML original)</h3>
+<p>Es el <strong>componente de aprendizaje automático propio</strong> del proyecto: clasificar cada</p>
+<p>intervención de la clase como <strong>pertinente</strong> (contenido académico) o <strong>no pertinente</strong></p>
+<p>(logística, avisos, conversación paralela). A diferencia del resto del sistema —que</p>
+<p>reutiliza modelos preentrenados—, este clasificador se **entrena con datos del propio</p>
+<p>dominio**.</p>
+<p><strong>Arquitectura (dos capas, enfoque &quot;embeddings + clasificador ligero&quot;):</strong></p>
+<p>un <em>featurizer</em> convierte cada texto en un vector y un clasificador de **Regresión</p>
+<p>Logística<strong> decide la etiqueta. El diseño deja el featurizer </strong>enchufable**: la</p>
+<p>versión actual usa <strong>TF-IDF</strong> (scikit-learn, sin GPU, entrena en segundos) como</p>
+<p>línea base, y está preparado para sustituirlo por <strong>embeddings de BETO</strong> (BERT en</p>
+<p>español) sin cambiar el resto del pipeline —ese es el refinamiento previsto para la</p>
+<p>sustentación.</p>
+<p><strong>Estado actual (línea base entrenada):</strong> el módulo entrena, evalúa, predice y</p>
+<p>persiste el modelo. Sobre un <strong>dataset semilla</strong> de 40 intervenciones etiquetadas</p>
+<p>(clase de Ley de Coulomb + frases típicas de aula):</p>
+<table>
+<thead><tr><th>Métrica (conjunto de prueba)</th><th>Valor</th></tr></thead><tbody>
+<tr><td>Exactitud (<em>accuracy</em>)</td><td>80,0 %</td></tr>
+<tr><td>Precisión (macro)</td><td>85,7 %</td></tr>
+<tr><td>Recall (macro)</td><td>80,0 %</td></tr>
+<tr><td>F1 (macro)</td><td>79,2 %</td></tr>
+</tbody></table>
+<blockquote><p><strong>Nota metodológica honesta:</strong> esta cifra es <strong>orientativa</strong>, medida sobre un</p></blockquote>
+<blockquote><p>dataset semilla pequeño. No es la métrica definitiva de la tesis. La meta del</p></blockquote>
+<blockquote><p>anteproyecto (<strong>precisión de filtrado &gt; 85 %</strong>) se validará al entrenar con</p></blockquote>
+<blockquote><p><strong>cientos de intervenciones reales</strong> extraídas de las transcripciones ya</p></blockquote>
+<blockquote><p>disponibles —trabajo previsto para la fase de refinamiento. Lo entregado hoy es</p></blockquote>
+<blockquote><p>el <strong>módulo funcional y reproducible</strong>, no una maqueta: clasifica correctamente</p></blockquote>
+<blockquote><p>frases nuevas que no vio en el entrenamiento (p. ej. reconoce como <em>pertinente</em></p></blockquote>
+<blockquote><p>&quot;definimos el campo eléctrico como la fuerza por unidad de carga&quot; y como *no</p></blockquote>
+<blockquote><p>pertinente* &quot;profe puedo ir al baño&quot;).</p></blockquote>
+<p><strong>Reproducible:</strong> <code>py -m src.semantic_filter data/filtrado_dataset.csv</code></p>
+<p>(script <code>src/semantic_filter.py</code>, dataset <code>data/filtrado_dataset.csv</code>).</p>
+<hr>
+<h2>3. Módulos implementados y funcionando</h2>
+<table>
+<thead><tr><th>Módulo</th><th>Estado</th><th>Evidencia</th></tr></thead><tbody>
+<tr><td>P1 · Captura de audio/video</td><td>✅ Funcional</td><td>Grabación desde navegador + carga de archivos</td></tr>
+<tr><td>P2 · Reducción de ruido (denoise)</td><td>✅ Funcional</td><td>Filtro suave validado: no degrada la voz</td></tr>
+<tr><td>P3 · Transcripción (Whisper large-v3)</td><td>✅ Validado</td><td>WER 12,68 %; clases reales de 1–2 h</td></tr>
+<tr><td>P3b · Subtítulos (SRT / VTT / JSON)</td><td>✅ Funcional</td><td>Archivos generados automáticamente</td></tr>
+<tr><td>P3c · Diarización (pyannote)</td><td>✅ Validado</td><td>7 hablantes separados en clase real</td></tr>
+<tr><td>P4 · Identificación del docente</td><td>✅ Funcional</td><td>Etiqueta &quot;Docente&quot; por mayor tiempo de habla + desglose</td></tr>
+<tr><td>P6 · Filtrado semántico (ML propio)</td><td>🟡 Línea base entrenada</td><td>Clasificador entrenable; 80 % acc. sobre dataset semilla</td></tr>
+<tr><td>Plataforma web de prueba (FastAPI)</td><td>✅ Funcional</td><td>Subir/grabar → procesar → ver → descargar</td></tr>
+</tbody></table>
+<p><strong>Pipeline completo:</strong></p>
+<p>`captura → extracción de audio (FFmpeg) → denoise → transcripción (Whisper large-v3) →</p>
+<p>diarización (pyannote) → identificación del docente → filtrado semántico (ML propio) →</p>
+<p>subtítulos (SRT/VTT/JSON) → interfaz web`</p>
+<p><strong>Plataforma web:</strong> interfaz de prueba con selección de motor y modelo, barras de</p>
+<p>progreso reales (subida y transcripción), tiempo de proceso, factor × tiempo real, y</p>
+<p>botón de cancelación de trabajos en curso.</p>
+<hr>
+<h2>4. Entorno técnico</h2>
+<ul>
+<li><strong>Lenguaje:</strong> Python</li>
+<li><strong>Motor de ASR:</strong> faster-whisper (<code>large-v3</code>), español (<code>es-CO</code>)</li>
+<li><strong>Diarización:</strong> pyannote.audio (procesamiento por ventanas para audios largos)</li>
+<li><strong>Preprocesamiento:</strong> FFmpeg (extracción + reducción de ruido)</li>
+<li><strong>Hardware:</strong> GPU NVIDIA GeForce RTX 3070 (8 GB), CUDA 12.6, precisión float16</li>
+<li><strong>Interfaz:</strong> FastAPI + Uvicorn</li>
+</ul>
+<hr>
+<h2>5. Archivos entregables</h2>
+<table>
+<thead><tr><th>Archivo</th><th>Contenido</th></tr></thead><tbody>
+<tr><td><code>webdata/salida/informe_comparacion_medium_vs_large.md</code></td><td>Informe comparativo de modelos</td></tr>
+<tr><td><code>WER Ground truth.txt</code></td><td>Transcripción de referencia manual (5 min)</td></tr>
+<tr><td><code>webdata/salida/&lt;job&gt;/transcripcion.json</code></td><td>Transcripción automática con tiempos y hablante</td></tr>
+<tr><td><code>webdata/salida/&lt;job&gt;/subtitulos.srt</code> / <code>.vtt</code></td><td>Subtítulos generados</td></tr>
+<tr><td><code>src/wer.py</code></td><td>Script reproducible de cálculo de WER</td></tr>
+<tr><td><code>src/semantic_filter.py</code></td><td>Módulo de filtrado semántico (ML propio, entrenable)</td></tr>
+<tr><td><code>data/filtrado_dataset.csv</code></td><td>Dataset semilla etiquetado (pertinente / no pertinente)</td></tr>
+</tbody></table>
+<hr>
+<h2>6. Trabajo pendiente (fases siguientes)</h2>
+<p>Se declara con transparencia lo que <strong>aún no está</strong> implementado, correspondiente a</p>
+<p>las fases posteriores del cronograma:</p>
+<ul>
+<li><strong>P6 · Filtrado semántico — ampliación:</strong> el módulo ya está implementado y</li>
+</ul>
+<p>entrenado sobre un dataset semilla. Falta **entrenarlo con cientos de intervenciones</p>
+<p>reales<strong> etiquetadas de las transcripciones existentes y </strong>sustituir el featurizer</p>
+<p>TF-IDF por embeddings de BETO**, para alcanzar y validar la meta de precisión &gt; 85 %.</p>
+<ul>
+<li><strong>P7 · Resumen automático</strong> de la clase.</li>
+<li><strong>P8 · Plataforma web definitiva</strong> (React + PostgreSQL).</li>
+<li><strong>Confirmar la identificación del docente por muestra de voz</strong> (embeddings de</li>
+</ul>
+<p>clases pasadas), como refinamiento de la heurística actual de mayor tiempo de habla.</p>
+<ul>
+<li><strong>Ampliar la medición de WER</strong> a 2–3 fragmentos adicionales para robustecer la</li>
+</ul>
+<p>cifra reportada en la tesis final (actualmente medida sobre un fragmento de 5 min).</p>
+<hr>
+<p>*Documento generado a partir de resultados reales del prototipo. Todas las cifras</p>
+<p>provienen de corridas ejecutadas sobre grabaciones de aula, no de estimaciones.*</p></body></html>
