@@ -1,0 +1,3 @@
+# Segmentación opcional del profesor para `python -m src.cli board`.
+# Instalar después de configurar PyTorch con CUDA para conservar la RTX 3070.
+ultralytics==8.3.200
